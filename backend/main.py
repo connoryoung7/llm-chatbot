@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_ollama import ChatOllama
+from langchain.tools import tool
 from pydantic import BaseModel
 import uvicorn
+from ddgs import DDGS
 
 import time
 
@@ -21,20 +23,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class ChatRequest(BaseModel):
+    message: str
+
+@tool
+def search_duckduckgo(query: str) -> str:
+    """
+    Searches the search engine DuckDuckGo and returns the content from the various web pages
+    
+    :param query: Description
+    :type query: str
+    :return: Description
+    :rtype: str
+    """
+    result = DDGS().text(query, max_results=1)
+    print(result)
+    return "Hey there folks!"
+
 llm = ChatOllama(
     model="gemma3:1b",
     temperature=0
 )
 
-class ChatRequest(BaseModel):
-    message: str
+llm_with_tools = llm.bind_tools([search_duckduckgo])
 
 @app.get("/")
 async def read_root():
     messages = [
+        ("system", """You are a personal assistant. You are responsible for attempting to answer any question asked. If you do not have the answer, try searching DuckDuckGo to see if you can find the answer."""),
         ("human", "What is the capital of Norway?")
     ]
-    response = llm.invoke(messages)
+    response = llm_with_tools.invoke(messages)
     return {"Hello": response.content}
 
 def stream_answer(message):
